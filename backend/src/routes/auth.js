@@ -9,6 +9,16 @@ const router = express.Router();
 router.post("/signup", async (req, res) => {
   const { username, password, role } = req.body;
 
+    if (!username || typeof username !== "string" || username.length < 3) {
+    return res.status(400).json({ error: "Invalid username" });
+  }
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters long" });
+  }
+  if (role && !["user", "admin"].includes(role)) {
+    return res.status(400).json({ error: "Invalid role" });
+  }
+  
   try {
     // Check if the user already exists
     const existingUser = await User.findOne({ username });
@@ -32,7 +42,13 @@ router.post("/signup", async (req, res) => {
 // Sign In Route
 router.post("/signin", async (req, res) => {
   const { username, password } = req.body;
-
+  if (!username || typeof username !== "string") {
+    return res.status(400).json({ error: "Invalid username" });
+  }
+  if (!password) {
+    return res.status(400).json({ error: "Password is required" });
+  }
+  
   try {
     // Find the user by username
     const user = await User.findOne({ username });
