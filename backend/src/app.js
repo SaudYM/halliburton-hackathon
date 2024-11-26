@@ -31,10 +31,7 @@ app.get("/", (req, res) => {
   res.send("Backend is working!");
 });
 
-// Route for testing API
-app.get("/api/test", (req, res) => {
-  res.json({ message: "Hello from the backend!" });
-});
+
 
 // Route handlers for specific API routes
 app.use("/api/auth", authRoutes); // Authentication routes
@@ -42,6 +39,7 @@ app.use("/api/user", userRoutes); // User-related routes
 app.use("/api/uploads", uploadRoutes); // File upload routes
 app.use("/api/test", testRoutes); // Test routes
 app.use("/api/posts", postRoutes); // Post-related routes
+
 app.use((req, res, next) => {
   res.status(404).json({ error: "Route not found" });
 });

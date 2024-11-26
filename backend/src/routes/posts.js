@@ -18,7 +18,6 @@ const containsRestrictedWords = (content) => {
 };
 
 
-
 // Create a Post
 router.post("/", verifyToken, async (req, res) => {
   const { title, content,thumbnail  } = req.body;
@@ -40,7 +39,6 @@ router.post("/", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 // Get All Posts (Admin only)
 router.get("/", verifyToken, async (req, res) => {
   try {
@@ -60,7 +58,6 @@ router.get("/", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 // Get User's Posts
 router.get("/my", verifyToken, async (req, res) => {
   try {
@@ -71,7 +68,6 @@ router.get("/my", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 // Update a Post
 router.put("/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
@@ -98,30 +94,7 @@ router.put("/:id", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 // Delete a Post
-router.delete("/:id", verifyToken, verifyAdmin, async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const post = await Post.findByIdAndDelete(id);
-    if (!post) {
-      return res.status(404).json({ error: "Post not found" });
-    }
-    if (post.thumbnail) {
-      const publicId = post.thumbnail.split("/").pop().split(".")[0]; // Extract Cloudinary public ID
-      await cloudinary.uploader.destroy(`thumbnails/${publicId}`);
-    }
-
-
-
-    res.status(200).json({ message: "Post deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting post:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
 
 router.get("/restricted", verifyToken, async (req, res) => {
   try {
@@ -138,12 +111,20 @@ router.get("/restricted", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+
 router.get("/export", verifyToken, async (req, res) => {
   try {
-    const { all } = req.query; // Query param to determine if all posts should be exported
+    const { all, id } = req.query; // Query param to determine if a specific post or all posts should be exported
     let posts;
 
-    if (all && req.user.role === "admin") {
+    if (id) {
+      // Export a specific post by ID
+      posts = await Post.find({ _id: id, author: req.user.id }).select("title content");
+      if (!posts || posts.length === 0) {
+        return res.status(404).json({ error: "Post not found." });
+      }
+    } else if (all && req.user.role === "admin") {
       // Admins can export all posts
       posts = await Post.find().select("title content");
     } else {
@@ -156,7 +137,7 @@ router.get("/export", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "No posts available to export." });
     }
 
-    // Create PDF document
+    // Create a PDF document
     const doc = new PDFDocument();
     const filename = `posts_${Date.now()}.pdf`;
 
@@ -164,14 +145,16 @@ router.get("/export", verifyToken, async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
     res.setHeader("Content-Type", "application/pdf");
 
-    doc.pipe(res); // Stream the PDF to the response
+    // Stream the PDF to the response
+    doc.pipe(res);
 
     // Add content to the PDF
-    doc.fontSize(20).text("Exported Posts", { underline: true });
     doc.moveDown();
 
+    // Add each post to the PDF
     posts.forEach((post, index) => {
       doc.fontSize(16).text(`${index + 1}. ${post.title}`, { bold: true });
+      doc.moveDown();
       doc.fontSize(12).text(post.content);
       doc.moveDown();
     });
@@ -183,6 +166,11 @@ router.get("/export", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Failed to export posts." });
   }
 });
+
+
+
+
+
 router.get("/stats/restricted", verifyToken, verifyAdmin, async (req, res) => {
   try {
     const restrictedCount = await Post.countDocuments({ restricted: true });
@@ -196,4 +184,53 @@ router.get("/stats/restricted", verifyToken, verifyAdmin, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+router.get("/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    res.status(200).json(post);
+  } catch (error) {
+    console.error("Error fetching post:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router.delete("/:id", verifyToken, async (req, res) => {
+
+  const { id } = req.params;
+
+  try {
+
+    // Fetch the post from the database
+    const post = await Post.findById(id);
+
+    if (!post) {
+      console.log("Post not found in database.");
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+   
+
+    // Allow deletion if the user is either the post author or an admin
+    if (post.author.toString() !== req.user.id && req.user.role !== "admin") {
+      console.log("Access denied. Not the author or admin.");
+      return res.status(403).json({ error: "Access denied. Not authorized to delete this post." });
+    }
+    
+
+    // Delete the post
+    await Post.findByIdAndDelete(id);
+
+    res.status(200).json({ message: "Post deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting post:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+
 module.exports = router;

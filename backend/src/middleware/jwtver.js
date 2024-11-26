@@ -12,8 +12,8 @@ const verifyToken = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
 
+    const user = await User.findById(decoded.id);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -22,9 +22,10 @@ const verifyToken = async (req, res, next) => {
       return res.status(403).json({ error: "Your account has been blocked." });
     }
 
-    req.user = decoded; // Attach decoded payload to the request
-    next(); // Pass control to the next middleware or route handler
+    req.user = { id: user._id.toString(), role: user.role };
+    next();
   } catch (error) {
+    console.error("JWT Verification Error:", error.message);
     res.status(401).json({ error: "Invalid token" });
   }
 };
