@@ -10,25 +10,25 @@ const PDFDocument = require("pdfkit"); // Import pdfkit
 // Restricted words list
 const containsRestrictedWords = (content) => {
   if (!content) return false; // Handle empty content
-  
+
   // Regular expression to match words that start and end with a capital letter
   const regex = /\b[A-Z][a-zA-Z]*[A-Z]\b/g;
 
   return regex.test(content);
 };
 
-
 // Create a Post
 router.post("/", verifyToken, async (req, res) => {
-  const { title, content,thumbnail  } = req.body;
+  const { title, content, thumbnail } = req.body;
 
   try {
     const isRestricted = containsRestrictedWords(content);
 
     const post = new Post({
       title,
-      content,thumbnail,
-      author: req.user.id, 
+      content,
+      thumbnail,
+      author: req.user.id,
       restricted: isRestricted,
     });
     await post.save();
@@ -49,9 +49,9 @@ router.get("/", verifyToken, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10; // Default: 10 posts per page
     const page = parseInt(req.query.page) || 1; // Default: Page 1
     const posts = await Post.find()
-    .populate("author", "username")
-    .skip((page - 1) * limit)
-    .limit(limit);    
+      .populate("author", "username")
+      .skip((page - 1) * limit)
+      .limit(limit);
     res.status(200).json(posts);
   } catch (error) {
     console.error("Error fetching posts:", error);
@@ -71,29 +71,68 @@ router.get("/my", verifyToken, async (req, res) => {
 // Update a Post
 router.put("/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { title, content } = req.body;
+  const { restricted } = req.body;
 
   try {
-    // Check for restricted words
-    const isRestricted = containsRestrictedWords(content);
-
-    // Find and update the post
-    const post = await Post.findOneAndUpdate(
-      { _id: id, author: req.user.id }, // Ensure the user owns the post
-      { title, content, restricted: isRestricted },
-      { new: true } // Return the updated post
-    );
-
+    // Find the post by ID
+    const post = await Post.findById(id);
     if (!post) {
-      return res.status(404).json({ error: "Post not found or not authorized" });
+      return res.status(404).json({ error: "Post not found" });
     }
 
-    res.status(200).json({ message: "Post updated successfully", post });
+    // Only admins or post authors can update restricted status
+    if (req.user.role !== "admin" && post.author.toString() !== req.user.id) {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    // Update the restricted status
+    post.restricted = restricted;
+    await post.save();
+
+    res.status(200).json({ message: "Post updated successfully.", post });
   } catch (error) {
     console.error("Error updating post:", error);
+    res.status(500).json({ error: "Failed to update post." });
+  }
+});
+router.get("/all", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const users = await User.find({}, "-password"); // Exclude password
+    res.status(200).json(users);
+  } catch (error) {
+    console.error("Error fetching users:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
+//block a user
+router.put("/block/:id", verifyToken, verifyAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Prevent the admin from blocking themselves
+    if (user._id.toString() === req.user.id) {
+      return res.status(400).json({ error: "You cannot block yourself." });
+    }
+
+    // Toggle the blocked status
+    user.blocked = !user.blocked;
+    await user.save();
+
+    res.status(200).json({
+      message: `User ${user.blocked ? "blocked" : "unblocked"} successfully.`,
+      user,
+    });
+  } catch (error) {
+    console.error("Error toggling block status:", error);
+    res.status(500).json({ error: "Failed to update user block status." });
+  }
+});
+
 // Delete a Post
 
 router.get("/restricted", verifyToken, async (req, res) => {
@@ -112,7 +151,6 @@ router.get("/restricted", verifyToken, async (req, res) => {
   }
 });
 
-
 router.get("/export", verifyToken, async (req, res) => {
   try {
     const { all, id } = req.query; // Query param to determine if a specific post or all posts should be exported
@@ -120,7 +158,9 @@ router.get("/export", verifyToken, async (req, res) => {
 
     if (id) {
       // Export a specific post by ID
-      posts = await Post.find({ _id: id, author: req.user.id }).select("title content");
+      posts = await Post.find({ _id: id, author: req.user.id }).select(
+        "title content"
+      );
       if (!posts || posts.length === 0) {
         return res.status(404).json({ error: "Post not found." });
       }
@@ -167,10 +207,6 @@ router.get("/export", verifyToken, async (req, res) => {
   }
 });
 
-
-
-
-
 router.get("/stats/restricted", verifyToken, verifyAdmin, async (req, res) => {
   try {
     const restrictedCount = await Post.countDocuments({ restricted: true });
@@ -199,11 +235,9 @@ router.get("/:id", verifyToken, async (req, res) => {
   }
 });
 router.delete("/:id", verifyToken, async (req, res) => {
-
   const { id } = req.params;
 
   try {
-
     // Fetch the post from the database
     const post = await Post.findById(id);
 
@@ -212,14 +246,13 @@ router.delete("/:id", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "Post not found" });
     }
 
-   
-
     // Allow deletion if the user is either the post author or an admin
     if (post.author.toString() !== req.user.id && req.user.role !== "admin") {
       console.log("Access denied. Not the author or admin.");
-      return res.status(403).json({ error: "Access denied. Not authorized to delete this post." });
+      return res
+        .status(403)
+        .json({ error: "Access denied. Not authorized to delete this post." });
     }
-    
 
     // Delete the post
     await Post.findByIdAndDelete(id);
@@ -230,7 +263,5 @@ router.delete("/:id", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
-
 
 module.exports = router;

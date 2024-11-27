@@ -12,6 +12,7 @@ const UserDashboard = () => {
     content: "",
     image: null,
   });
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -180,7 +181,9 @@ const UserDashboard = () => {
           {posts.map((post) => (
             <div
               key={post._id}
-              className="bg-gray-800 shadow-lg rounded-lg overflow-hidden transform hover:scale-105 transition-transform duration-300"
+              className={`bg-gray-800 shadow-lg rounded-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 ${
+                post.restricted ? "border-4 border-red-500" : ""
+              }`}
             >
               {post.thumbnail && (
                 <img
@@ -193,6 +196,11 @@ const UserDashboard = () => {
                 <h2 className="text-2xl font-bold text-yellow-400 mb-2">
                   {post.title}
                 </h2>
+                {post.restricted && (
+                  <div className="mb-2 text-red-500 font-semibold">
+                    ⚠️ This post contains restricted content.
+                  </div>
+                )}
                 <p className="text-gray-300 mb-4">
                   {post.content.substring(0, 100)}...
                 </p>
@@ -296,7 +304,8 @@ const UserDashboard = () => {
       <footer className="bg-gray-800 text-yellow-400 p-6 mt-12">
         <div className="container mx-auto text-center">
           <p className="animate-pulse">
-            Maybe the words you write could <span className="text-pink-400">Change a Life</span>
+            Maybe the words you write could{" "}
+            <span className="text-pink-400">Change a Life</span>
           </p>
         </div>
       </footer>

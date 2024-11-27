@@ -4,8 +4,24 @@ import { useNavigate } from "react-router-dom";
 
 const AdminDashboard = () => {
   const [posts, setPosts] = useState([]);
+  const [users, setUsers] = useState([]); // Users state
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await api.get("/user/all", {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        setUsers(response.data);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
+    };
+  
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -37,6 +53,31 @@ const AdminDashboard = () => {
     }
   };
 
+  const toggleBlock = async (userId, blockStatus) => {
+    try {
+      await api.put(
+        `/user/block/${userId}`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+      setUsers(
+        users.map((user) =>
+          user._id === userId ? { ...user, blocked: !blockStatus } : user
+        )
+      );
+      alert(
+        blockStatus
+          ? "User unblocked successfully!"
+          : "User blocked successfully!"
+      );
+    } catch (error) {
+      console.error("Error toggling block status:", error);
+      alert("Failed to update user block status.");
+    }
+  };
+
   const toggleFlag = async (postId, flagStatus) => {
     try {
       await api.put(
@@ -58,7 +99,7 @@ const AdminDashboard = () => {
       );
     } catch (error) {
       console.error("Error toggling flag:", error);
-      alert("Failed to update post flag.");
+      alert(error.response?.data?.error || "Failed to update post flag.");
     }
   };
 
@@ -111,7 +152,7 @@ const AdminDashboard = () => {
       {/* Main Content */}
       <main className="container mx-auto my-8 p-6">
         {/* Export Button */}
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-8">
           <button
             onClick={exportPosts}
             className="px-6 py-2 bg-blue-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-blue-600 transition-colors duration-300"
@@ -120,59 +161,104 @@ const AdminDashboard = () => {
           </button>
         </div>
 
-        {/* Posts Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {posts.map((post) => (
-            <div
-              key={post._id}
-              className="bg-gray-800 shadow-lg rounded-lg overflow-hidden transform hover:scale-105 transition-transform duration-300"
-            >
-              {post.thumbnail && (
-                <img
-                  src={post.thumbnail}
-                  alt="Post Thumbnail"
-                  className="w-full h-48 object-cover"
-                />
-              )}
-              <div className="p-6">
-                <h2 className="text-2xl font-bold text-green-400 mb-2">
-                  {post.title}
-                </h2>
-                <p className="text-gray-300 mb-4">
-                  {post.content.substring(0, 100)}...
-                </p>
-                <p className="mb-4">
-                  <strong>Flagged:</strong>{" "}
+        {/* Users Section */}
+        <section className="mb-12">
+          <h2 className="text-3xl font-bold text-green-400 mb-6">
+            Manage Users
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {users.map((user) => (
+              <div
+                key={user._id}
+                className="bg-gray-800 shadow-lg rounded-lg p-6 flex flex-col justify-between transform hover:scale-105 transition-transform duration-300"
+              >
+                <h3 className="text-xl font-bold text-green-400">
+                  {user.username}
+                </h3>
+                <p className="text-gray-300">
+                  Role: {user.role} | Blocked:{" "}
                   <span
                     className={
-                      post.restricted ? "text-red-500" : "text-green-500"
+                      user.blocked ? "text-red-500" : "text-green-500"
                     }
                   >
-                    {post.restricted ? "Yes" : "No"}
+                    {user.blocked ? "Yes" : "No"}
                   </span>
                 </p>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => toggleFlag(post._id, post.restricted)}
-                    className={`px-4 py-2 rounded text-gray-900 font-semibold transition-colors duration-300 ${
-                      post.restricted
-                        ? "bg-yellow-500 hover:bg-yellow-600"
-                        : "bg-red-500 hover:bg-red-600"
-                    }`}
-                  >
-                    {post.restricted ? "Unflag" : "Flag"}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(post._id)}
-                    className="px-4 py-2 bg-red-500 text-gray-900 rounded hover:bg-red-600 transition-colors duration-300 font-semibold"
-                  >
-                    Delete
-                  </button>
+                <button
+                  onClick={() => toggleBlock(user._id, user.blocked)}
+                  className={`px-4 py-2 mt-4 rounded text-gray-900 font-semibold transition-colors duration-300 ${
+                    user.blocked
+                      ? "bg-yellow-500 hover:bg-yellow-600"
+                      : "bg-red-500 hover:bg-red-600"
+                  }`}
+                >
+                  {user.blocked ? "Unblock" : "Block"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Posts Section */}
+        <section>
+          <h2 className="text-3xl font-bold text-green-400 mb-6">
+            Manage Posts
+          </h2>
+          {/* Posts Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {posts.map((post) => (
+              <div
+                key={post._id}
+                className="bg-gray-800 shadow-lg rounded-lg overflow-hidden transform hover:scale-105 transition-transform duration-300"
+              >
+                {post.thumbnail && (
+                  <img
+                    src={post.thumbnail}
+                    alt="Post Thumbnail"
+                    className="w-full h-48 object-cover"
+                  />
+                )}
+                <div className="p-6">
+                  <h2 className="text-2xl font-bold text-green-400 mb-2">
+                    {post.title}
+                  </h2>
+                  <p className="text-gray-300 mb-4">
+                    {post.content.substring(0, 100)}...
+                  </p>
+                  <p className="mb-4">
+                    <strong>Flagged:</strong>{" "}
+                    <span
+                      className={
+                        post.restricted ? "text-red-500" : "text-green-500"
+                      }
+                    >
+                      {post.restricted ? "Yes" : "No"}
+                    </span>
+                  </p>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => toggleFlag(post._id, post.restricted)}
+                      className={`px-4 py-2 rounded text-gray-900 font-semibold transition-colors duration-300 ${
+                        post.restricted
+                          ? "bg-yellow-500 hover:bg-yellow-600"
+                          : "bg-red-500 hover:bg-red-600"
+                      }`}
+                    >
+                      {post.restricted ? "Unflag" : "Flag"}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(post._id)}
+                      className="px-4 py-2 bg-red-500 text-gray-900 rounded hover:bg-red-600 transition-colors duration-300 font-semibold"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </section>
       </main>
 
       {/* Footer Section */}
